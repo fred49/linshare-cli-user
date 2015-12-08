@@ -16,6 +16,7 @@ import codecs
 import logging
 import urllib2
 from mock import patch
+from mock import Mock
 from copy import deepcopy
 
 from linsharecli.user.document import add_parser as add_document_parser
@@ -172,20 +173,27 @@ class LinShareTest(unittest.TestCase):
         # during output parsing (stdout)
         self.debug = DEBUG_LEVEL
 
+        # mocking default config
+        config = Mock(name="config mock")
+        config.server.api_version.value = 0
+
         self.parser = argparse.ArgumentParser(prog="test")
+
 
         # Adding all others parsers.
         subparsers = self.parser.add_subparsers()
-        add_document_parser(subparsers, "documents", "Documents management")
-        add_threads_parser(subparsers, "threads", "threads management")
-        add_share_parser(subparsers, "shares", "Created shares management")
+        add_document_parser(subparsers, "documents", "Documents management",
+                            config)
+        add_threads_parser(subparsers, "threads", "threads management", config)
+        add_share_parser(subparsers, "shares", "Created shares management",
+                         config)
         add_received_share_parser(subparsers,
                                   "received_shares",
-                                  "Received shares management")
+                                  "Received shares management", config)
         add_received_share_parser(subparsers,
                                   "rshares",
-                                  "Alias of received_share command")
-        add_users_parser(subparsers, "users", "users")
+                                  "Alias of received_share command", config)
+        add_users_parser(subparsers, "users", "users", config)
         self.api_version = 0
 
     def get_default_ns(self):
@@ -201,6 +209,7 @@ class LinShareTest(unittest.TestCase):
         ns.user = "homer.simpson@nodomain.com"
         ns.password = "secret"
         ns.api_version = self.api_version
+        ns.env_password = False
         return ns
 
     def run_default0(self, command):
@@ -531,7 +540,7 @@ class TestDocumentsList(LinShareTest):
     @patch('linshareapi.user.shares.Shares2.create',
            return_value=get_created_share_data())
     def test_documents_list13b(self, *args):
-        """retrieve documents list and download them"""
+        """retrieve documents list and share them"""
         command = "documents list file5 --share --mail bart.simpson@localhost"
         self.api_version = 1
         output = self.run_default0(command)
