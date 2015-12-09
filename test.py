@@ -15,6 +15,8 @@ import argparse
 import codecs
 import logging
 import urllib2
+import uuid
+import tempfile
 from mock import patch
 from mock import Mock
 from copy import deepcopy
@@ -168,6 +170,8 @@ def get_created_share_data():
 # -----------------------------------------------------------------------------
 class LinShareTest(unittest.TestCase):
 
+    api_version = 0
+
     def setUp(self):
         # debug level superior or equal to three may have side effect
         # during output parsing (stdout)
@@ -175,7 +179,7 @@ class LinShareTest(unittest.TestCase):
 
         # mocking default config
         config = Mock(name="config mock")
-        config.server.api_version.value = 0
+        config.server.api_version.value = self.api_version
 
         self.parser = argparse.ArgumentParser(prog="test")
 
@@ -194,7 +198,6 @@ class LinShareTest(unittest.TestCase):
                                   "rshares",
                                   "Alias of received_share command", config)
         add_users_parser(subparsers, "users", "users", config)
-        self.api_version = 0
 
     def get_default_ns(self):
         ns = argparse.Namespace()
@@ -208,7 +211,6 @@ class LinShareTest(unittest.TestCase):
         ns.host = "http://192.168.1.106:8081"
         ns.user = "homer.simpson@nodomain.com"
         ns.password = "secret"
-        ns.api_version = self.api_version
         ns.env_password = False
         return ns
 
@@ -242,8 +244,15 @@ class LinShareTest(unittest.TestCase):
             print ex
             return False
 
+    def get_temp_file(self):
+        dest = os.path.join(
+            tempfile.gettempdir(),
+            unicode(uuid.uuid4()).replace("-", "") + ".tmp")
+        return dest
+
     def run_default_sub1(self, command):
         file_path = '/tmp/toto'
+        file_path = self.get_temp_file()
         f = codecs.open(file_path, "w", "utf-8")
         sys.stdout2 = sys.stdout
         sys.stdout = f
@@ -266,6 +275,7 @@ class LinShareTest(unittest.TestCase):
 
     def run_default_sub2(self, command):
         file_path = '/tmp/toto'
+        file_path = self.get_temp_file()
         f = codecs.open(file_path, "w", "utf-8")
         sys.stdout2 = sys.stdout
         sys.stdout = f
@@ -437,7 +447,7 @@ class TestDocumentsList(LinShareTest):
         self.assertEqual(output[0], "6 documents can not be downloaded.\n")
 
     @patch('linshareapi.core.CoreCli.auth', return_value=True)
-    @patch('linshareapi.user.documents.Documents.delete', return_value=
+    @patch('linshareapi.user.documents.Documents.delete', return_value=deepcopy(
            {
              "ciphered": False,
              "creationDate": 1424735870159,
@@ -451,7 +461,7 @@ class TestDocumentsList(LinShareTest):
              "size": 10140,
              "type": "text/plain",
              "uuid": "f62a1fad-0692-4ec8-8cde-68f1cc3f9b49"
-           })
+           }))
     @patch('linshareapi.user.documents.Documents.list',
            return_value=get_document_data())
     def test_documents_list10(self, *args):
@@ -526,7 +536,9 @@ class TestDocumentsList(LinShareTest):
     def test_documents_list13(self, *args):
         """retrieve documents list and download them"""
         command = "documents list file5 --share --mail bart.simpson@localhost"
-        self.api_version = 0
+        if self.api_version == 1:
+            return True
+
         #self.assertRaises(ValueError, self.run_default0(command))
         try:
             self.run_default0(command)
@@ -542,11 +554,13 @@ class TestDocumentsList(LinShareTest):
     def test_documents_list13b(self, *args):
         """retrieve documents list and share them"""
         command = "documents list file5 --share --mail bart.simpson@localhost"
-        self.api_version = 1
+        if self.api_version == 0:
+            return True
+
         output = self.run_default0(command)
         self.assertRegexpMatches("".join(output), ".*Bart Simpson.*")
         self.assertRegexpMatches("".join(output), ".*The following documents :.*")
-        if self.debug == 2:
+        if self.debug >= 2:
             self.assertEqual(len(output), 45)
         else:
             self.assertEqual(len(output), 9)
@@ -558,6 +572,33 @@ class TestDocumentsList(LinShareTest):
     #    self.assertTrue(self.run_default("users list"))
 
 
+# -----------------------------------------------------------------------------
+class ATestDocumentsList(TestDocumentsList):
+    api_version = 1
+
+
 if __name__ == '__main__':
-    unittest.main()
-#
+    #unittest.main()
+
+    #loader = unittest.TestLoader()
+    #suite = loader.loadTestsFromTestCase(TestDocumentsList)
+    #unittest.TextTestRunner(verbosity=2).run(suite)
+
+    loader = unittest.TestLoader()
+    alltests = unittest.TestSuite([
+        loader.loadTestsFromTestCase(TestDocumentsList),
+        loader.loadTestsFromTestCase(ATestDocumentsList)
+    ])
+    unittest.TextTestRunner(verbosity=2).run(alltests)
+
+
+
+
+    #loader = unittest.TestLoader()
+    #suite = loader.loadTestsFromTestCase(TestDocumentsList)
+    ##suite = loader.loadTestsFromTestCase(TestCreateFindAndDeleteDomainsApi)
+    ##suite = loader.loadTestsFromTestCase(TestErrorCodeAndMessagesDomainsApi)
+    #alltests = unittest.TestSuite([
+    #               suite,
+    #])
+    #unittest.TextTestRunner(verbosity=2).run(alltests)
