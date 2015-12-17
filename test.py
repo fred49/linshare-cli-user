@@ -170,7 +170,10 @@ def get_created_share_data():
 # -----------------------------------------------------------------------------
 class LinShareTest(unittest.TestCase):
 
-    api_version = 0
+
+    def __init__(self, api_version=None, *args, **kwargs):
+        super(LinShareTest, self).__init__(*args, **kwargs)
+        self.api_version = api_version
 
     def setUp(self):
         # debug level superior or equal to three may have side effect
@@ -309,8 +312,24 @@ class LinShareTest(unittest.TestCase):
             print i + " : " + str(getattr(args, i))
 
 
+def fred():
+    return deepcopy(
+       {
+         "ciphered": False,
+         "creationDate": 1424735870159,
+         "description": "",
+         "expirationDate": 1432425468866,
+         "metaData": None,
+         "modificationDate": 1424735870385,
+         "name": "aa",
+         "sha256sum":
+           "916e2eab1fbc18c548a1ac89eb157b7a44e313f8116958984eca2d99eaba6d",
+         "size": 10140,
+         "type": "text/plain",
+         "uuid": "f62a1fad-0692-4ec8-8cde-68f1cc3f9b49"
+       })
 # -----------------------------------------------------------------------------
-class TestDocumentsList(LinShareTest):
+class DisableTestDocumentsList(LinShareTest):
 
     ##########################
     # * header : 3 lines
@@ -340,16 +359,18 @@ class TestDocumentsList(LinShareTest):
         self.assertEqual(len(output[0]), self.DATA_DOCUMENTS_WIDTH)
         self.assertRegexpMatches(output[-4], "^\| file5.*")
 
-    @patch('linshareapi.core.CoreCli.auth', return_value=True)
-    @patch('linshareapi.user.documents.Documents.list',
-           return_value=get_document_data())
     def test_documents_list3(self, *args):
         """retrieve documents list reversed sorted by name"""
-        command = "documents list -r --sort-name"
-        output = self.run_default0(command)
-        self.assertEqual(len(output), self.DATA_DOCUMENTS_HEIGHT)
-        self.assertEqual(len(output[0]), self.DATA_DOCUMENTS_WIDTH)
-        self.assertRegexpMatches(output[-4], "^\| file0.*")
+        @patch('linshareapi.core.CoreCli.auth', return_value=True)
+        @patch('linshareapi.user.documents.Documents.list',
+               return_value=get_document_data())
+        def a(*args):
+            command = "documents list -r --sort-name"
+            output = self.run_default0(command)
+            self.assertEqual(len(output), self.DATA_DOCUMENTS_HEIGHT)
+            self.assertEqual(len(output[0]), self.DATA_DOCUMENTS_WIDTH)
+            self.assertRegexpMatches(output[-4], "^\| file0.*")
+        a()
 
     @patch('linshareapi.core.CoreCli.auth', return_value=True)
     @patch('linshareapi.user.documents.Documents.list',
@@ -445,6 +466,7 @@ class TestDocumentsList(LinShareTest):
         output = self.run_default0(command)
         self.assertEqual(len(output), 2)
         self.assertEqual(output[0], "6 documents can not be downloaded.\n")
+
 
     @patch('linshareapi.core.CoreCli.auth', return_value=True)
     @patch('linshareapi.user.documents.Documents.delete', return_value=deepcopy(
@@ -572,9 +594,58 @@ class TestDocumentsList(LinShareTest):
     #    self.assertTrue(self.run_default("users list"))
 
 
+class TestDocumentsList(LinShareTest):
+    ##########################
+    # * header : 3 lines
+    # * content : 6 documents
+    # * footer : 3 line
+    DATA_DOCUMENTS_HEIGHT = 12
+    DATA_DOCUMENTS_WIDTH = 100
+
+    def test_documents_list7(self, *args):
+        """retrieve documents list and count them"""
+        @patch('linshareapi.core.CoreCli.auth', return_value=True)
+        @patch('linshareapi.user.documents.Documents.list',
+           return_value=get_document_data())
+        def a(*args):
+            command = "documents list --count"
+            output = self.run_default0(command)
+            self.assertEqual(len(output), 2)
+            self.assertEqual(output[0], "Documents found : 6\n")
+        a()
+
+    def test_documents_list8(self, *args):
+        """retrieve documents list and download them"""
+        @patch('linshareapi.core.CoreCli.auth', return_value=True)
+        @patch('linshareapi.user.documents.Documents.list',
+               return_value=get_document_data())
+        @patch('linshareapi.user.documents.Documents.download',
+               return_value=('ffffffff', 18))
+        def a(*args):
+            command = "documents list --download "
+            output = self.run_default0(command)
+            self.assertEqual(len(output), 7)
+        a()
+
+    def test_documents_list9(self, *args):
+        """retrieve documents list and try to download them (all failed)"""
+        @patch('linshareapi.core.CoreCli.auth', return_value=True)
+        @patch('linshareapi.user.documents.Documents.list',
+               return_value=get_document_data())
+        @patch('linshareapi.user.documents.Documents.download',
+               side_effect=urllib2.HTTPError(404, 'Boom!', None, None, None))
+        def a(*args):
+            command = "documents list --download "
+            output = self.run_default0(command)
+            self.assertEqual(len(output), 2)
+            self.assertEqual(output[0], "6 documents can not be downloaded.\n")
+        a()
+
+
 # -----------------------------------------------------------------------------
 class ATestDocumentsList(TestDocumentsList):
-    api_version = 1
+    pass
+    #api_version = 1
 
 
 if __name__ == '__main__':
@@ -585,9 +656,11 @@ if __name__ == '__main__':
     #unittest.TextTestRunner(verbosity=2).run(suite)
 
     loader = unittest.TestLoader()
+    #loader.loadTestsFromTestCase(TestDocumentsList(api_version=1)),
+
     alltests = unittest.TestSuite([
-        loader.loadTestsFromTestCase(TestDocumentsList),
-        loader.loadTestsFromTestCase(ATestDocumentsList)
+        loader.loadTestsFromTestCase(TestDocumentsList(api_version=1)),
+    #    loader.loadTestsFromTestCase(ATestDocumentsList(api_version=0))
     ])
     unittest.TextTestRunner(verbosity=2).run(alltests)
 
